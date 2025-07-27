@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace DockerBackup\Command;
 
 use DockerBackup\Service\VolumeBackupService;
-use DockerBackup\ValueObject\BackupStatus;
-use Symfony\Component\Console\Attribute\AsCommand;
+use DockerBackup\ValueObject\BackupResult;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -24,7 +23,7 @@ final class BackupVolumesCommand extends Command
 
     protected function configure(): void
     {
-        $defaultDir = $_ENV['BACKUP_DEFAULT_DIR'] ?? './backups/volumes';
+        $defaultDir = getcwd() . '/backups/volumes';
 
         $this->setName('backup:volumes')
             ->setDescription('Backup Docker volumes to tar.gz archives')
@@ -39,6 +38,12 @@ final class BackupVolumesCommand extends Command
                 InputOption::VALUE_REQUIRED,
                 'Output directory for backup files',
                 $defaultDir  // Usa la variabile d'ambiente
+            )
+            ->addOption(
+                'no-compression',
+                null,
+                InputOption::VALUE_NONE,
+                'Create uncompressed tar archives instead of gzip compressed'
             )
             ->addOption(
                 'list',
@@ -77,6 +82,7 @@ HELP
         }
 
         $volumeNames = $input->getArgument('volumes');
+        $compress = !$input->getOption('no-compression');
 
         // Check if volumes argument is provided
         if (empty($volumeNames)) {
@@ -89,7 +95,7 @@ HELP
         $outputDir = $input->getOption('output-dir');
 
         $io->title('Docker Volume Backup');
-        $io->text("Backing up volumes to: <info>{$outputDir}</info>");
+        $io->text("Backing up volumes to: <info>$outputDir</info>");
 
         // Validate volumes exist
         $availableVolumes = $this->volumeBackupService->getAvailableVolumes();
@@ -102,19 +108,12 @@ HELP
         }
 
         // Perform backups
-        $io->progressStart(count($volumeNames));
+        $io->writeln(sprintf('Starting backup of <info>%d</info> volume(s)...', count($volumeNames)));
+        $io->newLine();
 
-        $results = [];
-        foreach ($volumeNames as $volumeName) {
-            $result = $this->volumeBackupService->backupSingleVolume($volumeName, $outputDir);
-            $results[] = $result;
-            $io->progressAdvance();
-        }
+        $results = $this->performBackupsWithProgress($volumeNames, $outputDir, $compress, $io);
 
-        $io->progressFinish();
-
-        // Display results
-        $this->displayResults($io, $results);
+        $this->displaySummary($io, $results);
 
         // Return appropriate exit code
         $failedCount = count(array_filter($results, fn($r) => $r->isFailed()));
@@ -147,50 +146,86 @@ HELP
         return Command::SUCCESS;
     }
 
-    private function displayResults(SymfonyStyle $io, array $results): void
+    private function performBackupsWithProgress(array $volumeNames, string $outputDir, bool $compress, SymfonyStyle $io): array
     {
-        $io->newLine();
-        $io->section('Backup Results');
+        $results = [];
+        $totalCount = count($volumeNames);
 
-        $tableData = [];
-        $successCount = 0;
-        $failedCount = 0;
-        $skippedCount = 0;
+        foreach ($volumeNames as $index => $volumeName) {
+            $currentIndex = $index + 1;
 
-        foreach ($results as $result) {
-            $tableData[] = [
-                $result->getStatusIcon(),
-                $result->resourceName,
-                $result->status->value,
-                $result->filePath ? basename($result->filePath) : 'N/A',
-                $result->getFormattedFileSize(),
-                $result->message ?? 'N/A'
-            ];
+            // Show what we're doing
+            $io->write(sprintf('[%d/%d] 📦 Backing up <info>%s</info>... ', $currentIndex, $totalCount, $volumeName));
 
-            match ($result->status) {
-                BackupStatus::SUCCESS => $successCount++,
-                BackupStatus::FAILED => $failedCount++,
-                BackupStatus::SKIPPED => $skippedCount++,
-            };
+            // Perform the backup with timing
+            $startTime = microtime(true);
+            $result = $this->volumeBackupService->backupSingleVolume($volumeName, $outputDir, $compress);
+            $duration = round(microtime(true) - $startTime, 2);
+
+            // Clear the line and show result
+            $this->clearCurrentLine($io);
+            $this->displayVolumeResult($io, $currentIndex, $totalCount, $volumeName, $result, $duration);
+
+            $results[] = $result;
         }
 
-        $io->table(
-            ['Status', 'Volume', 'Result', 'File', 'Size', 'Message'],
-            $tableData
-        );
+        return $results;
+    }
 
-        // Summary
+    private function displayVolumeResult(
+        SymfonyStyle $io,
+        int $currentIndex,
+        int $totalCount,
+        string $volumeName,
+        BackupResult $result,
+        float $duration
+    ): void {
+        // Format size info for successful backups
+        $sizeInfo = $result->isSuccessful() && $result->filePath
+            ? sprintf(' (%s)', $result->getFormattedFileSize())
+            : '';
+
+        // Main result line
+        $io->writeln(sprintf(
+            '[%d/%d] %s <info>%s</info>%s <comment>(%ss)</comment>',
+            $currentIndex,
+            $totalCount,
+            $result->getStatusIcon(),
+            $volumeName,
+            $sizeInfo,
+            $duration
+        ));
+
+        // Additional message for errors or skips
+        if ($result->message && !$result->isSuccessful()) {
+            $io->writeln(sprintf('      <comment>→ %s</comment>', $result->message));
+        }
+    }
+
+    private function displaySummary(SymfonyStyle $io, array $results): void
+    {
+        $successCount = count(array_filter($results, fn(BackupResult $r) => $r->isSuccessful()));
+        $failedCount = count(array_filter($results, fn(BackupResult $r) => $r->isFailed()));
+        $skippedCount = count(array_filter($results, fn(BackupResult $r) => $r->isSkipped()));
+
         $io->newLine();
         $io->text([
             sprintf('<info>✅ Successful:</info> %d', $successCount),
-            sprintf('<comment>⚠️  Skipped:</comment> %d', $skippedCount),
+            sprintf('<comment>⚠️ Skipped:</comment> %d', $skippedCount),
             sprintf('<error>❌ Failed:</error> %d', $failedCount),
         ]);
 
         if ($failedCount > 0) {
-            $io->warning('Some backups failed. Check the error messages above.');
+            $io->warning('Some backups failed.');
         } elseif ($successCount > 0) {
             $io->success('All backups completed successfully!');
         }
+    }
+
+    private function clearCurrentLine(SymfonyStyle $io): void
+    {
+        $io->write("\r"); // Return to start of line
+        $io->write(str_repeat(' ', 100));   // Clear the line
+        $io->write("\r"); // Return to start again
     }
 }

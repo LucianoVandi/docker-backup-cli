@@ -1,26 +1,25 @@
 services:
   docker-backup-dev:
     build: .
+    image: docker-backup-dev:v1.0.0
     container_name: docker-backup-dev
     volumes:
-      # Monta il codice sorgente per sviluppo
+      # Mount source code for development
       - .:/app
-      # Socket Docker per interagire con Docker host
+      # Socket Docker to interact with Docker host
       - /var/run/docker.sock:/var/run/docker.sock
-      # Cache Composer per velocizzare le installazioni
+      # Cache Composer to speed up installations
       - composer-cache:/root/.composer
-      # Directory per i build
+      # Mount build directory for testing
       - ./build:/app/build
-      # IMPORTANTE: Monta directory backups dell'host per i test
+      # IMPORTANT: Mount host backups directory for testing
       - ./backups:/app/backups
-      # Monta anche /tmp per test alternativi
-      - /tmp:/tmp
     working_dir: /app
     environment:
       - COMPOSER_CACHE_DIR=/root/.composer
-      # Path del progetto nell'host per il mapping dei volumi Docker-in-Docker
+      # Path of the project on the host for Docker-in-Docker volume mapping
       - HOST_PROJECT_DIR=${PWD}
-    # Mantiene il container attivo per sviluppo
+    # Keep container active for development
     tty: true
     stdin_open: true
 

@@ -24,7 +24,7 @@ $input = new ArgvInput();
 $env = $input->getParameterOption(['--env', '-e'], $_ENV['APP_ENV'] ?? 'dev', true);
 $debug = $_ENV['APP_DEBUG'] ?? ($env !== 'prod');
 
-// Crea l'applicazione (senza Kernel!)
+// Create the application (without Kernel!)
 $application = new Application('Docker Backup CLI', '1.0.0');
 
 exit($application->run($input));

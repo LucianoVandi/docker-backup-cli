@@ -19,89 +19,33 @@ final class DockerService
      */
     public function listVolumes(): array
     {
-        // Prima proviamo il formato JSON moderno (Docker 23+)
         try {
             $process = $this->runDockerCommand(['volume', 'ls', '--format', 'json']);
             $output = trim($process->getOutput());
 
-            if (!empty($output)) {
-                $volumes = [];
-                $lines = explode("\n", $output);
+            if (empty($output)) {
+                return [];
+            }
 
-                foreach ($lines as $line) {
-                    $line = trim($line);
-                    if (empty($line)) {
-                        continue;
-                    }
+            $volumes = [];
+            foreach (explode("\n", $output) as $line) {
+                $line = trim($line);
+                if (empty($line)) continue;
 
-                    // Se otteniamo JSON vero, usiamolo
-                    $data = json_decode($line, true);
-                    if (json_last_error() === JSON_ERROR_NONE && is_array($data) && isset($data['Name'])) {
-                        $volumes[] = DockerVolume::fromArray($data);
-                    }
-                    // Se otteniamo solo "json", il formato non è supportato
-                    else if ($line === 'json') {
-                        // Fallback a metodo compatibile
-                        return $this->listVolumesCompatible();
-                    }
-                }
-
-                // Se abbiamo ottenuto volumi validi, ritorniamoli
-                if (!empty($volumes)) {
-                    return $volumes;
+                $data = json_decode($line, true);
+                if (json_last_error() === JSON_ERROR_NONE && isset($data['Name'])) {
+                    $volumes[] = DockerVolume::fromArray($data);
                 }
             }
-        } catch (\Exception) {
-            // Se il comando fallisce, proviamo il metodo compatibile
-        }
 
-        // Fallback per versioni Docker più vecchie
-        return $this->listVolumesCompatible();
+            return $volumes;
+        } catch (DockerCommandException $e) {
+            throw new DockerCommandException(
+                "Failed to list volumes. Please ensure Docker 23+ is installed: " . $e->getMessage()
+            );
+        }
     }
 
-    /**
-     * Metodo compatibile per versioni Docker più vecchie (< 23.0)
-     * @return DockerVolume[]
-     */
-    private function listVolumesCompatible(): array
-    {
-        // Usiamo formato template che funziona con tutte le versioni
-        $process = $this->runDockerCommand(['volume', 'ls', '--format', '{{.Name}}']);
-        $output = trim($process->getOutput());
-
-        if (empty($output)) {
-            return [];
-        }
-
-        $volumes = [];
-        $lines = explode("\n", $output);
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (empty($line)) {
-                continue;
-            }
-
-            // Per ogni volume, otteniamo dettagli completi con inspect
-            try {
-                $inspectProcess = $this->runDockerCommand(['volume', 'inspect', $line]);
-                $inspectOutput = trim($inspectProcess->getOutput());
-                $volumeData = json_decode($inspectOutput, true);
-
-                if (json_last_error() === JSON_ERROR_NONE && isset($volumeData[0])) {
-                    $volumes[] = DockerVolume::fromArray($volumeData[0]);
-                } else {
-                    // Fallback con dati minimi
-                    $volumes[] = new DockerVolume(name: $line);
-                }
-            } catch (\Exception) {
-                // Fallback con dati minimi
-                $volumes[] = new DockerVolume(name: $line);
-            }
-        }
-
-        return $volumes;
-    }
 
     /**
      * @return DockerImage[]

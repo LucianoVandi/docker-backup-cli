@@ -6,8 +6,7 @@
         "src"
     ],
     "files": [
-        "bin/console",
-        ".env"
+        "bin/console"
     ],
     "finder": [
         {

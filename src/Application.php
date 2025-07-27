@@ -18,7 +18,6 @@ final class Application extends BaseApplication
     {
         parent::__construct($name, $version);
 
-        // Registra i nostri comandi personalizzati
         $this->registerCustomCommands();
     }
 
@@ -26,7 +25,7 @@ final class Application extends BaseApplication
     {
         parent::configureIO($input, $output);
 
-        // Banner personalizzato
+        // Custom command banner
         if (!$input->hasParameterOption(['--quiet', '-q'], true)) {
             $output->writeln('');
             $output->writeln('<info>🐳 Docker Backup & Restore CLI Tool</info>');
@@ -37,7 +36,7 @@ final class Application extends BaseApplication
 
     protected function getDefaultCommands(): array
     {
-        // Mantieni solo i comandi essenziali di Symfony Console
+        // Keep only essential Symfony Console commands
         return [
             new HelpCommand(),
             new ListCommand(),

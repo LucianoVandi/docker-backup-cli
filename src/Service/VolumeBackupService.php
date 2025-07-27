@@ -38,7 +38,7 @@ final readonly class VolumeBackupService
         return $results;
     }
 
-    public function backupSingleVolume(string $volumeName, string $backupDirectory): BackupResult
+    public function backupSingleVolume(string $volumeName, string $backupDirectory, bool $compress = true): BackupResult
     {
         $this->logger->info("Starting backup of volume: {$volumeName}");
 
@@ -48,7 +48,7 @@ final readonly class VolumeBackupService
                 throw new BackupException("Volume '{$volumeName}' not found");
             }
 
-            $archivePath = $this->getArchivePath($volumeName, $backupDirectory);
+            $archivePath = $this->getArchivePath($volumeName, $backupDirectory, $compress);
 
             // Skip if backup already exists
             if (file_exists($archivePath)) {
@@ -57,7 +57,7 @@ final readonly class VolumeBackupService
             }
 
             // Perform backup using Docker container
-            $this->performVolumeBackup($volumeName, $archivePath);
+            $this->performVolumeBackup($volumeName, $archivePath, $compress);
 
             $this->logger->info("Successfully backed up volume: {$volumeName}");
             return BackupResult::success($volumeName, $archivePath);
@@ -78,7 +78,7 @@ final readonly class VolumeBackupService
         return $this->dockerService->listVolumes();
     }
 
-    private function performVolumeBackup(string $volumeName, string $archivePath): void
+    private function performVolumeBackup(string $volumeName, string $archivePath, bool $compress = true): void
     {
         $backupDir = dirname($archivePath);
         $archiveFilename = basename($archivePath);
@@ -86,12 +86,16 @@ final readonly class VolumeBackupService
         // Converte il path del container nel path equivalente dell'host
         $hostBackupDir = $this->getHostPath($backupDir);
 
+        $tarCommand = $compress
+            ? ['tar', 'czf', "/backup/{$archiveFilename}", '-C', '/volume', '.']
+            : ['tar', 'cf', "/backup/{$archiveFilename}", '-C', '/volume', '.'];
+
         $dockerArgs = [
             '--rm',
             '-v', "{$volumeName}:/volume:ro",
             '-v', "{$hostBackupDir}:/backup",
             'alpine',
-            'tar', 'czf', "/backup/{$archiveFilename}", '-C', '/volume', '.'
+            ...$tarCommand,
         ];
 
         $process = $this->dockerService->runContainer($dockerArgs);
@@ -112,68 +116,52 @@ final readonly class VolumeBackupService
      */
     private function getHostPath(string $containerPath): string
     {
-        // Se siamo in ambiente di sviluppo (container), convertiamo il path
-        if (str_starts_with($containerPath, '/app/')) {
-            // /app nel container corrisponde alla directory corrente dell'host
-            // Il docker-compose monta . come /app
-            $relativePath = substr($containerPath, 5); // rimuove "/app/"
-
-            // Otteniamo il path dell'host dalla variabile d'ambiente o assumiamo il working dir
+        // Solo se siamo in ambiente di sviluppo con Docker
+        if (isset($_ENV['DOCKER_BACKUP_DEV_MODE'])) {
             $hostProjectDir = $_ENV['HOST_PROJECT_DIR'] ?? getcwd();
-            return $hostProjectDir . '/' . $relativePath;
+            return $hostProjectDir . substr($containerPath, 4);
         }
 
-        // Se non inizia con /app, assumiamo che sia già un path dell'host
-        return $containerPath;
+        return $containerPath; // Standalone mode
     }
 
-    private function getArchivePath(string $volumeName, string $backupDirectory): string
+    private function getArchivePath(string $volumeName, string $backupDirectory, bool $compress = true): string
     {
-        return $backupDirectory . DIRECTORY_SEPARATOR . $volumeName . '.tar.gz';
+        $extension = $compress ? '.tar.gz' : '.tar';
+        return $backupDirectory . DIRECTORY_SEPARATOR . $volumeName . $extension;
     }
 
     private function ensureBackupDirectoryExists(string $backupDirectory): void
     {
-        // Se la directory esiste già, tutto ok
+        // Risolvi il path assoluto per evitare problemi con path relativi
+        if (is_dir($backupDirectory)) {
+            $backupDirectory = realpath($backupDirectory);
+        }
+
+        // Se la directory esiste ed è writable, tutto ok
         if (is_dir($backupDirectory) && is_writable($backupDirectory)) {
             return;
         }
 
-        // Proviamo a creare la directory
+        // Se la directory non esiste, creala
         if (!is_dir($backupDirectory)) {
             $success = @mkdir($backupDirectory, 0755, true);
+
             if (!$success) {
-                // Se mkdir fallisce, proviamo un approccio diverso
-                $this->createDirectoryRecursively($backupDirectory);
+                $error = error_get_last();
+                throw new BackupException(
+                    "Failed to create backup directory '{$backupDirectory}': " .
+                    ($error['message'] ?? 'Unknown error')
+                );
             }
         }
 
-        // Verifica finale
-        if (!is_dir($backupDirectory)) {
-            throw new BackupException("Failed to create backup directory: {$backupDirectory}");
-        }
-
+        // Verifica finale che sia writable
         if (!is_writable($backupDirectory)) {
-            throw new BackupException("Backup directory is not writable: {$backupDirectory}");
-        }
-    }
-
-    private function createDirectoryRecursively(string $path): void
-    {
-        $parts = explode('/', trim($path, '/'));
-        $currentPath = '';
-
-        foreach ($parts as $part) {
-            if (empty($part)) continue;
-
-            $currentPath .= '/' . $part;
-
-            if (!is_dir($currentPath)) {
-                $success = @mkdir($currentPath, 0755);
-                if (!$success && !is_dir($currentPath)) {
-                    throw new BackupException("Failed to create directory: {$currentPath}");
-                }
-            }
+            throw new BackupException(
+                "Backup directory '{$backupDirectory}' exists but is not writable. " .
+                "Check permissions or run with sudo if needed."
+            );
         }
     }
 }
