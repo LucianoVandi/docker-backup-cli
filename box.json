@@ -1,0 +1,26 @@
+{
+    "alias": "docker-backup.phar",
+    "banner": "Docker Backup & Restore CLI Tool - Version 1.0.0",
+    "chmod": "0755",
+    "directories": [
+        "src"
+    ],
+    "files": [
+        "bin/console",
+        ".env"
+    ],
+    "finder": [
+        {
+            "name": "*.php",
+            "exclude": [
+                "tests"
+            ],
+            "in": "vendor"
+        }
+    ],
+    "main": "bin/console",
+    "output": "docker-backup.phar",
+    "shebang": "#!/usr/bin/env php",
+    "compression": "GZ",
+    "git": null
+}

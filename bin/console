@@ -1,0 +1,30 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use DockerBackup\Application;
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Dotenv\Dotenv;
+
+if (!in_array(PHP_SAPI, ['cli', 'phpdbg', 'embed', 'micro'], true)) {
+    echo 'Warning: The console should be invoked via the CLI version of PHP, not the '.PHP_SAPI.' SAPI'.PHP_EOL;
+}
+
+set_time_limit(0);
+
+require dirname(__DIR__).'/vendor/autoload.php';
+
+// Load environment variables
+if (file_exists(dirname(__DIR__).'/.env')) {
+    (new Dotenv())->bootEnv(dirname(__DIR__).'/.env');
+}
+
+$input = new ArgvInput();
+$env = $input->getParameterOption(['--env', '-e'], $_ENV['APP_ENV'] ?? 'dev', true);
+$debug = $_ENV['APP_DEBUG'] ?? ($env !== 'prod');
+
+// Crea l'applicazione (senza Kernel!)
+$application = new Application('Docker Backup CLI', '1.0.0');
+
+exit($application->run($input));
