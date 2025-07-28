@@ -4,3 +4,4 @@ vendor
 .idea
 .DS_Store
 *.phar
+.php-cs-fixer.cache

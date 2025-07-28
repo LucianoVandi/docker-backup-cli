@@ -4,8 +4,4 @@ declare(strict_types=1);
 
 namespace DockerBackup\Exception;
 
-use RuntimeException;
-
-final class BackupException extends RuntimeException
-{
-}
+final class BackupException extends \RuntimeException {}

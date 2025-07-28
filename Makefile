@@ -11,7 +11,7 @@ dev: ## Avvia l'ambiente di sviluppo
 	docker-compose exec docker-backup-dev bash
 
 install: ## Installa le dipendenze Composer
-	docker-compose exec docker-backup-dev composer install
+	docker-compose exec docker-backup-dev composer install --dev
 
 test: ## Esegue i test PHPUnit
 	docker-compose exec docker-backup-dev composer test

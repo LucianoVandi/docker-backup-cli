@@ -69,7 +69,8 @@ The <info>%command.name%</info> command creates backups of Docker volumes.
 The command creates compressed tar.gz archives of volume contents.
 Each volume is backed up using a temporary Alpine container to ensure consistency.
 HELP
-            );
+            )
+        ;
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -89,21 +90,23 @@ HELP
             $io->error('You must specify at least one volume name, or use --list to see available volumes.');
             $io->text('Usage: docker:backup:volumes volume1 [volume2 ...]');
             $io->text('   or: docker:backup:volumes --list');
+
             return Command::FAILURE;
         }
 
         $outputDir = $input->getOption('output-dir');
 
         $io->title('Docker Volume Backup');
-        $io->text("Backing up volumes to: <info>$outputDir</info>");
+        $io->text("Backing up volumes to: <info>{$outputDir}</info>");
 
         // Validate volumes exist
         $availableVolumes = $this->volumeBackupService->getAvailableVolumes();
-        $availableVolumeNames = array_map(fn($vol) => $vol->name, $availableVolumes);
+        $availableVolumeNames = array_map(fn ($vol) => $vol->name, $availableVolumes);
 
         $invalidVolumes = array_diff($volumeNames, $availableVolumeNames);
         if (!empty($invalidVolumes)) {
             $io->error('The following volumes do not exist: ' . implode(', ', $invalidVolumes));
+
             return Command::FAILURE;
         }
 
@@ -116,7 +119,8 @@ HELP
         $this->displaySummary($io, $results);
 
         // Return appropriate exit code
-        $failedCount = count(array_filter($results, fn($r) => $r->isFailed()));
+        $failedCount = count(array_filter($results, fn ($r) => $r->isFailed()));
+
         return $failedCount > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
@@ -126,6 +130,7 @@ HELP
 
         if (empty($volumes)) {
             $io->warning('No Docker volumes found.');
+
             return Command::SUCCESS;
         }
 
@@ -136,7 +141,7 @@ HELP
             $tableData[] = [
                 $volume->name,
                 $volume->driver,
-                $volume->mountpoint ?: 'N/A'
+                $volume->mountpoint ?: 'N/A',
             ];
         }
 
@@ -204,9 +209,9 @@ HELP
 
     private function displaySummary(SymfonyStyle $io, array $results): void
     {
-        $successCount = count(array_filter($results, fn(BackupResult $r) => $r->isSuccessful()));
-        $failedCount = count(array_filter($results, fn(BackupResult $r) => $r->isFailed()));
-        $skippedCount = count(array_filter($results, fn(BackupResult $r) => $r->isSkipped()));
+        $successCount = count(array_filter($results, fn (BackupResult $r) => $r->isSuccessful()));
+        $failedCount = count(array_filter($results, fn (BackupResult $r) => $r->isFailed()));
+        $skippedCount = count(array_filter($results, fn (BackupResult $r) => $r->isSkipped()));
 
         $io->newLine();
         $io->text([

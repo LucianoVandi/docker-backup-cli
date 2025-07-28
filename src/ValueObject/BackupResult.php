@@ -15,13 +15,12 @@ final readonly class BackupResult
         public ?string $message = null,
         public ?int $fileSize = null,
         public ?\DateTimeImmutable $completedAt = null
-    ) {
-    }
+    ) {}
 
     public static function success(string $resourceName, string $filePath): self
     {
         $fileSize = file_exists($filePath) ? filesize($filePath) : null;
-        
+
         return new self(
             resourceName: $resourceName,
             status: BackupStatus::SUCCESS,

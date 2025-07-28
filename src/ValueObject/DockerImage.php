@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace DockerBackup\ValueObject;
 
-use InvalidArgumentException;
-
 final readonly class DockerImage
 {
     public function __construct(
@@ -16,11 +14,11 @@ final readonly class DockerImage
         public array $labels = []
     ) {
         if (empty($this->id)) {
-            throw new InvalidArgumentException('Image ID cannot be empty');
+            throw new \InvalidArgumentException('Image ID cannot be empty');
         }
 
         if (!$this->isValidImageId($this->id)) {
-            throw new InvalidArgumentException(
+            throw new \InvalidArgumentException(
                 sprintf('Invalid image ID "%s". Must be a valid Docker image ID or hash.', $this->id)
             );
         }
@@ -49,35 +47,6 @@ final readonly class DockerImage
             created: (int) ($data['Created'] ?? 0),
             labels: $labels
         );
-    }
-
-    /**
-     * Converte una stringa di labels in formato Docker in array associativo
-     */
-    private static function parseLabelsString(string $labelsString): array
-    {
-        if (empty($labelsString)) {
-            return [];
-        }
-
-        $labels = [];
-        $pairs = explode(',', $labelsString);
-
-        foreach ($pairs as $pair) {
-            $pair = trim($pair);
-            if (empty($pair)) {
-                continue;
-            }
-
-            if (str_contains($pair, '=')) {
-                [$key, $value] = explode('=', $pair, 2);
-                $labels[trim($key)] = trim($value);
-            } else {
-                $labels[trim($pair)] = '';
-            }
-        }
-
-        return $labels;
     }
 
     public function toArray(): array
@@ -113,6 +82,35 @@ final readonly class DockerImage
         }
 
         return sprintf('%.2f %s', $size, $units[$unitIndex]);
+    }
+
+    /**
+     * Converte una stringa di labels in formato Docker in array associativo.
+     */
+    private static function parseLabelsString(string $labelsString): array
+    {
+        if (empty($labelsString)) {
+            return [];
+        }
+
+        $labels = [];
+        $pairs = explode(',', $labelsString);
+
+        foreach ($pairs as $pair) {
+            $pair = trim($pair);
+            if (empty($pair)) {
+                continue;
+            }
+
+            if (str_contains($pair, '=')) {
+                [$key, $value] = explode('=', $pair, 2);
+                $labels[trim($key)] = trim($value);
+            } else {
+                $labels[trim($pair)] = '';
+            }
+        }
+
+        return $labels;
     }
 
     private function isValidImageId(string $id): bool

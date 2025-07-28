@@ -23,6 +23,7 @@ final readonly class VolumeBackupService
 
     /**
      * @param string[] $volumeNames
+     *
      * @return BackupResult[]
      */
     public function backupVolumes(array $volumeNames, string $backupDirectory): array
@@ -53,6 +54,7 @@ final readonly class VolumeBackupService
             // Skip if backup already exists
             if (file_exists($archivePath)) {
                 $this->logger->warning("Backup file already exists, skipping: {$archivePath}");
+
                 return BackupResult::skipped($volumeName, "File already exists: {$archivePath}");
             }
 
@@ -60,12 +62,13 @@ final readonly class VolumeBackupService
             $this->performVolumeBackup($volumeName, $archivePath, $compress);
 
             $this->logger->info("Successfully backed up volume: {$volumeName}");
-            return BackupResult::success($volumeName, $archivePath);
 
+            return BackupResult::success($volumeName, $archivePath);
         } catch (\Throwable $exception) {
             $this->logger->error("Failed to backup volume: {$volumeName}", [
-                'error' => $exception->getMessage()
+                'error' => $exception->getMessage(),
             ]);
+
             return BackupResult::failed($volumeName, $exception->getMessage());
         }
     }
@@ -102,7 +105,7 @@ final readonly class VolumeBackupService
 
         if (!$process->isSuccessful()) {
             throw new BackupException(
-                "Failed to create backup archive: " . $process->getErrorOutput()
+                'Failed to create backup archive: ' . $process->getErrorOutput()
             );
         }
 
@@ -112,13 +115,14 @@ final readonly class VolumeBackupService
     }
 
     /**
-     * Converte un path del container nel path equivalente dell'host
+     * Converte un path del container nel path equivalente dell'host.
      */
     private function getHostPath(string $containerPath): string
     {
         // Solo se siamo in ambiente di sviluppo con Docker
         if (isset($_ENV['DOCKER_BACKUP_DEV_MODE'])) {
             $hostProjectDir = $_ENV['HOST_PROJECT_DIR'] ?? getcwd();
+
             return $hostProjectDir . substr($containerPath, 4);
         }
 
@@ -128,6 +132,7 @@ final readonly class VolumeBackupService
     private function getArchivePath(string $volumeName, string $backupDirectory, bool $compress = true): string
     {
         $extension = $compress ? '.tar.gz' : '.tar';
+
         return $backupDirectory . DIRECTORY_SEPARATOR . $volumeName . $extension;
     }
 
@@ -149,9 +154,10 @@ final readonly class VolumeBackupService
 
             if (!$success) {
                 $error = error_get_last();
+
                 throw new BackupException(
-                    "Failed to create backup directory '{$backupDirectory}': " .
-                    ($error['message'] ?? 'Unknown error')
+                    "Failed to create backup directory '{$backupDirectory}': "
+                    . ($error['message'] ?? 'Unknown error')
                 );
             }
         }
@@ -159,8 +165,8 @@ final readonly class VolumeBackupService
         // Verifica finale che sia writable
         if (!is_writable($backupDirectory)) {
             throw new BackupException(
-                "Backup directory '{$backupDirectory}' exists but is not writable. " .
-                "Check permissions or run with sudo if needed."
+                "Backup directory '{$backupDirectory}' exists but is not writable. "
+                . 'Check permissions or run with sudo if needed.'
             );
         }
     }

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace DockerBackup\ValueObject;
 
-use InvalidArgumentException;
-
 final readonly class DockerVolume
 {
     public function __construct(
@@ -16,11 +14,11 @@ final readonly class DockerVolume
         public array $labels = []
     ) {
         if (empty($this->name)) {
-            throw new InvalidArgumentException('Volume name cannot be empty');
+            throw new \InvalidArgumentException('Volume name cannot be empty');
         }
 
         if (!$this->isValidVolumeName($this->name)) {
-            throw new InvalidArgumentException(
+            throw new \InvalidArgumentException(
                 sprintf('Invalid volume name "%s". Volume names must be valid Docker volume names.', $this->name)
             );
         }
@@ -52,9 +50,20 @@ final readonly class DockerVolume
         );
     }
 
+    public function toArray(): array
+    {
+        return [
+            'Name' => $this->name,
+            'Driver' => $this->driver,
+            'Mountpoint' => $this->mountpoint,
+            'Options' => $this->options,
+            'Labels' => $this->labels,
+        ];
+    }
+
     /**
      * Converte una stringa di labels in formato Docker in array associativo
-     * Esempio: "key1=value1,key2=value2" -> ["key1" => "value1", "key2" => "value2"]
+     * Esempio: "key1=value1,key2=value2" -> ["key1" => "value1", "key2" => "value2"].
      */
     private static function parseLabelsString(string $labelsString): array
     {
@@ -81,17 +90,6 @@ final readonly class DockerVolume
         }
 
         return $labels;
-    }
-
-    public function toArray(): array
-    {
-        return [
-            'Name' => $this->name,
-            'Driver' => $this->driver,
-            'Mountpoint' => $this->mountpoint,
-            'Options' => $this->options,
-            'Labels' => $this->labels,
-        ];
     }
 
     private function isValidVolumeName(string $name): bool

@@ -30,7 +30,9 @@ final class DockerService
             $volumes = [];
             foreach (explode("\n", $output) as $line) {
                 $line = trim($line);
-                if (empty($line)) continue;
+                if (empty($line)) {
+                    continue;
+                }
 
                 $data = json_decode($line, true);
                 if (json_last_error() === JSON_ERROR_NONE && isset($data['Name'])) {
@@ -41,11 +43,10 @@ final class DockerService
             return $volumes;
         } catch (DockerCommandException $e) {
             throw new DockerCommandException(
-                "Failed to list volumes. Please ensure Docker 23+ is installed: " . $e->getMessage()
+                'Failed to list volumes. Please ensure Docker 23+ is installed: ' . $e->getMessage()
             );
         }
     }
-
 
     /**
      * @return DockerImage[]
@@ -86,6 +87,7 @@ final class DockerService
     {
         try {
             $this->runDockerCommand(['volume', 'inspect', $volumeName]);
+
             return true;
         } catch (DockerCommandException) {
             return false;
@@ -96,6 +98,7 @@ final class DockerService
     {
         try {
             $this->runDockerCommand(['image', 'inspect', $imageReference]);
+
             return true;
         } catch (DockerCommandException) {
             return false;
@@ -105,6 +108,7 @@ final class DockerService
     public function runContainer(array $dockerArgs): Process
     {
         $command = array_merge([self::DOCKER_COMMAND, 'run'], $dockerArgs);
+
         return $this->executeCommand($command);
     }
 
@@ -121,6 +125,7 @@ final class DockerService
     private function runDockerCommand(array $args): Process
     {
         $command = array_merge([self::DOCKER_COMMAND], $args);
+
         return $this->executeCommand($command);
     }
 
@@ -131,6 +136,7 @@ final class DockerService
 
         try {
             $process->mustRun();
+
             return $process;
         } catch (ProcessFailedException $exception) {
             throw new DockerCommandException(
