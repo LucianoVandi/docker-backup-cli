@@ -22,6 +22,7 @@ final readonly class VolumeRestoreService
 
     /**
      * @param string[] $archivePaths
+     *
      * @return RestoreResult[]
      */
     public function restoreVolumes(array $archivePaths, bool $overwrite = false, bool $createVolumes = true): array
@@ -56,9 +57,10 @@ final readonly class VolumeRestoreService
 
             if ($volumeExists && !$overwrite) {
                 $this->logger->warning("Volume already exists, skipping: {$volumeName}");
+
                 return RestoreResult::skipped(
                     $volumeName,
-                    "Volume already exists. Use --overwrite to replace it.",
+                    'Volume already exists. Use --overwrite to replace it.',
                     $archivePath
                 );
             }
@@ -92,7 +94,8 @@ final readonly class VolumeRestoreService
     }
 
     /**
-     * Get available backup archives from a directory
+     * Get available backup archives from a directory.
+     *
      * @return array<string, array{path: string, volume: string, compressed: bool, size: int}>
      */
     public function getAvailableBackups(string $backupDirectory): array
@@ -144,7 +147,7 @@ final readonly class VolumeRestoreService
             '--rm',
             '-v', "{$volumeName}:/dummy",
             'alpine',
-            'true'
+            'true',
         ]);
 
         if (!$process->isSuccessful()) {
@@ -162,7 +165,7 @@ final readonly class VolumeRestoreService
             '--rm',
             '-v', "{$volumeName}:/volume",
             'alpine',
-            'sh', '-c', 'rm -rf /volume/* /volume/.[!.]* /volume/..?*'
+            'sh', '-c', 'rm -rf /volume/* /volume/.[!.]* /volume/..?*',
         ]);
 
         if (!$process->isSuccessful()) {
@@ -214,12 +217,13 @@ final readonly class VolumeRestoreService
                 '--rm',
                 '-v', "{$volumeName}:/volume:ro",
                 'alpine',
-                'du', '-sb', '/volume'
+                'du', '-sb', '/volume',
             ]);
 
             if ($process->isSuccessful()) {
                 $output = trim($process->getOutput());
                 $parts = explode("\t", $output);
+
                 return (int) ($parts[0] ?? 0);
             }
         } catch (\Throwable) {
@@ -237,6 +241,7 @@ final readonly class VolumeRestoreService
         // Only if we're in development environment with Docker
         if (isset($_ENV['DOCKER_BACKUP_DEV_MODE'])) {
             $hostProjectDir = $_ENV['HOST_PROJECT_DIR'] ?? getcwd();
+
             return $hostProjectDir . substr($containerPath, 4);
         }
 

@@ -37,7 +37,7 @@ final class BackupVolumesCommand extends Command
                 'o',
                 InputOption::VALUE_REQUIRED,
                 'Output directory for backup files',
-                $defaultDir  // Usa la variabile d'ambiente
+                $defaultDir
             )
             ->addOption(
                 'no-compression',

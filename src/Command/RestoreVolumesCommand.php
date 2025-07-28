@@ -109,7 +109,7 @@ HELP
         $archivePaths = $this->resolveArchivePaths($archiveNames, $backupDir);
 
         // Validate all archives exist
-        $missingArchives = array_filter($archivePaths, fn($path) => !file_exists($path));
+        $missingArchives = array_filter($archivePaths, fn ($path) => !file_exists($path));
         if (!empty($missingArchives)) {
             $io->error('The following archive files do not exist:');
             foreach ($missingArchives as $missing) {
@@ -139,7 +139,7 @@ HELP
         $this->displaySummary($io, $results);
 
         // Return appropriate exit code
-        $failedCount = count(array_filter($results, fn($r) => $r->isFailed()));
+        $failedCount = count(array_filter($results, fn ($r) => $r->isFailed()));
 
         return $failedCount > 0 ? Command::FAILURE : Command::SUCCESS;
     }
@@ -248,9 +248,9 @@ HELP
 
     private function displaySummary(SymfonyStyle $io, array $results): void
     {
-        $successCount = count(array_filter($results, fn(RestoreResult $r) => $r->isSuccessful()));
-        $failedCount = count(array_filter($results, fn(RestoreResult $r) => $r->isFailed()));
-        $skippedCount = count(array_filter($results, fn(RestoreResult $r) => $r->isSkipped()));
+        $successCount = count(array_filter($results, fn (RestoreResult $r) => $r->isSuccessful()));
+        $failedCount = count(array_filter($results, fn (RestoreResult $r) => $r->isFailed()));
+        $skippedCount = count(array_filter($results, fn (RestoreResult $r) => $r->isSkipped()));
 
         $io->newLine();
         $io->text([

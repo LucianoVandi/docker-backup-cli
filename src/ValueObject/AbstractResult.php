@@ -51,8 +51,6 @@ abstract readonly class AbstractResult
         );
     }
 
-    abstract protected static function getDefaultSuccessMessage(): string;
-
     public function isSuccessful(): bool
     {
         return $this->status === OperationStatus::SUCCESS;
@@ -94,4 +92,6 @@ abstract readonly class AbstractResult
             OperationStatus::SKIPPED => '⚠️',
         };
     }
+
+    abstract protected static function getDefaultSuccessMessage(): string;
 }
