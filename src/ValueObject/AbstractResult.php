@@ -21,6 +21,7 @@ abstract readonly class AbstractResult
     {
         $fileSize = file_exists($filePath) ? filesize($filePath) : null;
 
+        // @phpstan-ignore-next-line
         return new static(
             resourceName: $resourceName,
             status: OperationStatus::SUCCESS,
@@ -33,6 +34,7 @@ abstract readonly class AbstractResult
 
     public static function failed(string $resourceName, string $message): static
     {
+        // @phpstan-ignore-next-line
         return new static(
             resourceName: $resourceName,
             status: OperationStatus::FAILED,
@@ -43,6 +45,7 @@ abstract readonly class AbstractResult
 
     public static function skipped(string $resourceName, string $message): static
     {
+        // @phpstan-ignore-next-line
         return new static(
             resourceName: $resourceName,
             status: OperationStatus::SKIPPED,

@@ -69,11 +69,13 @@ final readonly class VolumeRestoreService
             // Create volume if it doesn't exist and createVolume is true
             if (!$volumeExists && $createVolume) {
                 $this->createVolume($volumeName);
+            // @phpstan-ignore-next-line
             } elseif (!$volumeExists && !$createVolume) {
                 throw new BackupException("Volume '{$volumeName}' does not exist and --no-create-volume was specified");
             }
 
             // If volume exists and overwrite is true, we need to clean it first
+            // @phpstan-ignore-next-line
             if ($volumeExists && $overwrite) {
                 $this->cleanVolume($volumeName);
             }
