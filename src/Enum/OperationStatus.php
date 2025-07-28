@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace DockerBackup\Enum;
 
-enum BackupStatus: string
+enum OperationStatus: string
 {
     case SUCCESS = 'success';
     case FAILED = 'failed';

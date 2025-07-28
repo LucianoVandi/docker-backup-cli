@@ -1,6 +1,5 @@
 {
     "alias": "docker-backup.phar",
-    "banner": "Docker Backup & Restore CLI Tool - Version 1.0.0",
     "chmod": "0755",
     "directories": [
         "src"
