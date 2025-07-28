@@ -259,8 +259,8 @@ final readonly class VolumeRestoreService
         // Validate file extension
         if (!$this->hasValidArchiveExtension($archivePath)) {
             throw new BackupException(
-                "Invalid archive format: " . basename($archivePath) .
-                ". Expected .tar or .tar.gz extension"
+                'Invalid archive format: ' . basename($archivePath)
+                . '. Expected .tar or .tar.gz extension'
             );
         }
 
@@ -279,12 +279,12 @@ final readonly class VolumeRestoreService
                 '--rm',
                 '-v', "{$hostBackupDir}:/backup:ro",
                 'alpine',
-                ...$testCommand
+                ...$testCommand,
             ]);
 
             if (!$process->isSuccessful()) {
                 throw new BackupException(
-                    "Archive integrity check failed: " . trim($process->getErrorOutput())
+                    'Archive integrity check failed: ' . trim($process->getErrorOutput())
                 );
             }
 
@@ -297,7 +297,6 @@ final readonly class VolumeRestoreService
             // Log successful validation
             $fileCount = count(explode("\n", $output));
             $this->logger->info("Archive validation successful: {$fileCount} files found");
-
         } catch (BackupException $e) {
             throw $e;
         } catch (\Throwable $e) {

@@ -136,6 +136,7 @@ HELP
 
         if (!$this->confirmDestructiveOperation($archivePaths, $overwrite, $io)) {
             $io->text('Operation cancelled by user.');
+
             return Command::SUCCESS;
         }
 
@@ -318,18 +319,19 @@ HELP
                 // Quick format check first
                 if (!str_ends_with($archivePath, '.tar') && !str_ends_with($archivePath, '.tar.gz')) {
                     $invalidArchives[$archiveName] = 'Invalid file extension (expected .tar or .tar.gz)';
+
                     continue;
                 }
 
                 // Check file is readable
                 if (!is_readable($archivePath)) {
                     $invalidArchives[$archiveName] = 'File is not readable';
+
                     continue;
                 }
 
                 // Full validation will happen during restore...
                 // @see VolumeRestoreService::validateArchive()
-
             } catch (\Throwable $e) {
                 $invalidArchives[$archiveName] = $e->getMessage();
             }
