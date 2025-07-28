@@ -52,6 +52,8 @@ final readonly class VolumeRestoreService
                 throw new BackupException("Archive file is not readable: {$archivePath}");
             }
 
+            $this->validateArchive($archivePath);
+
             // Check if volume already exists
             $volumeExists = $this->dockerService->volumeExists($volumeName);
 
@@ -60,8 +62,7 @@ final readonly class VolumeRestoreService
 
                 return RestoreResult::skipped(
                     $volumeName,
-                    'Volume already exists. Use --overwrite to replace it.',
-                    $archivePath
+                    'Volume already exists. Use --overwrite to replace it.'
                 );
             }
 
@@ -79,17 +80,20 @@ final readonly class VolumeRestoreService
 
             // Perform restore
             $extractedBytes = $this->performVolumeRestore($volumeName, $archivePath);
+            $message = $extractedBytes !== null
+                ? sprintf('Restore completed successfully (%s extracted)', $this->formatBytes($extractedBytes))
+                : 'Restore completed successfully';
 
             $this->logger->info("Successfully restored volume: {$volumeName}");
 
-            return RestoreResult::success($volumeName, $archivePath);
+            return RestoreResult::success($volumeName, $archivePath, $message);
         } catch (\Throwable $exception) {
             $this->logger->error("Failed to restore volume: {$volumeName}", [
                 'error' => $exception->getMessage(),
                 'archive' => $archivePath,
             ]);
 
-            return RestoreResult::failed($volumeName, $exception->getMessage(), $archivePath);
+            return RestoreResult::failed($volumeName, $exception->getMessage());
         }
     }
 
@@ -246,5 +250,79 @@ final readonly class VolumeRestoreService
         }
 
         return $containerPath; // Standalone mode
+    }
+
+    private function validateArchive(string $archivePath): void
+    {
+        $this->logger->info("Validating archive: {$archivePath}");
+
+        // Validate file extension
+        if (!$this->hasValidArchiveExtension($archivePath)) {
+            throw new BackupException(
+                "Invalid archive format: " . basename($archivePath) .
+                ". Expected .tar or .tar.gz extension"
+            );
+        }
+
+        $backupDir = dirname($archivePath);
+        $archiveFilename = basename($archivePath);
+        $hostBackupDir = $this->getHostPath($backupDir);
+
+        // Test archive integrity by trying to list contents
+        $isCompressed = str_ends_with($archiveFilename, '.tar.gz');
+        $testCommand = $isCompressed
+            ? ['tar', 'tzf', "/backup/{$archiveFilename}"]
+            : ['tar', 'tf', "/backup/{$archiveFilename}"];
+
+        try {
+            $process = $this->dockerService->runContainer([
+                '--rm',
+                '-v', "{$hostBackupDir}:/backup:ro",
+                'alpine',
+                ...$testCommand
+            ]);
+
+            if (!$process->isSuccessful()) {
+                throw new BackupException(
+                    "Archive integrity check failed: " . trim($process->getErrorOutput())
+                );
+            }
+
+            // Check if archive has content
+            $output = trim($process->getOutput());
+            if (empty($output)) {
+                throw new BackupException("Archive appears to be empty: {$archiveFilename}");
+            }
+
+            // Log successful validation
+            $fileCount = count(explode("\n", $output));
+            $this->logger->info("Archive validation successful: {$fileCount} files found");
+
+        } catch (BackupException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new BackupException(
+                "Failed to validate archive {$archiveFilename}: " . $e->getMessage()
+            );
+        }
+    }
+
+    private function hasValidArchiveExtension(string $archivePath): bool
+    {
+        return str_ends_with($archivePath, '.tar') || str_ends_with($archivePath, '.tar.gz');
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $size = $bytes;
+        $unitIndex = 0;
+
+        while ($size >= 1024 && $unitIndex < count($units) - 1) {
+            $size /= 1024;
+            $unitIndex++;
+        }
+
+        return sprintf('%.2f %s', $size, $units[$unitIndex]);
     }
 }

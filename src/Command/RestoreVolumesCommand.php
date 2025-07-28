@@ -119,6 +119,26 @@ HELP
             return Command::FAILURE;
         }
 
+        // Validate archive integrity (quick check)
+        $io->text('🔍 Validating archives...');
+        $invalidArchives = $this->validateArchivesIntegrity($archivePaths);
+        if (!empty($invalidArchives)) {
+            $io->error('The following archives failed validation:');
+            foreach ($invalidArchives as $invalid => $reason) {
+                $io->text("  - {$invalid}: {$reason}");
+            }
+
+            return Command::FAILURE;
+        }
+
+        $io->text('<info>✅ All archives validated successfully</info>');
+        $io->newLine();
+
+        if (!$this->confirmDestructiveOperation($archivePaths, $overwrite, $io)) {
+            $io->text('Operation cancelled by user.');
+            return Command::SUCCESS;
+        }
+
         $io->title('Docker Volume Restore');
         $io->text("Restoring volumes from: <info>{$backupDir}</info>");
 
@@ -285,5 +305,82 @@ HELP
         }
 
         return sprintf('%.2f %s', $size, $units[$unitIndex]);
+    }
+
+    private function validateArchivesIntegrity(array $archivePaths): array
+    {
+        $invalidArchives = [];
+
+        foreach ($archivePaths as $archivePath) {
+            $archiveName = basename($archivePath);
+
+            try {
+                // Quick format check first
+                if (!str_ends_with($archivePath, '.tar') && !str_ends_with($archivePath, '.tar.gz')) {
+                    $invalidArchives[$archiveName] = 'Invalid file extension (expected .tar or .tar.gz)';
+                    continue;
+                }
+
+                // Check file is readable
+                if (!is_readable($archivePath)) {
+                    $invalidArchives[$archiveName] = 'File is not readable';
+                    continue;
+                }
+
+                // Full validation will happen during restore...
+                // @see VolumeRestoreService::validateArchive()
+
+            } catch (\Throwable $e) {
+                $invalidArchives[$archiveName] = $e->getMessage();
+            }
+        }
+
+        return $invalidArchives;
+    }
+
+    private function confirmDestructiveOperation(array $archivePaths, bool $overwrite, SymfonyStyle $io): bool
+    {
+        $needsConfirmation = false;
+        $reasons = [];
+
+        // Check if overwrite mode is enabled
+        if ($overwrite) {
+            $needsConfirmation = true;
+            $reasons[] = 'Overwrite mode enabled - existing volumes will be replaced';
+        }
+
+        // Check if restoring many archives
+        if (count($archivePaths) > 3) {
+            $needsConfirmation = true;
+            $reasons[] = sprintf('Restoring %d archives', count($archivePaths));
+        }
+
+        // Check if any archive is very large (>100MB)
+        $largeArchives = [];
+        foreach ($archivePaths as $archivePath) {
+            $size = filesize($archivePath) ?: 0;
+            if ($size > 100 * 1024 * 1024) { // 100MB
+                $largeArchives[] = basename($archivePath) . ' (' . $this->formatFileSize($size) . ')';
+            }
+        }
+
+        if (!empty($largeArchives)) {
+            $needsConfirmation = true;
+            $reasons[] = 'Large archives detected: ' . implode(', ', $largeArchives);
+        }
+
+        // If no confirmation needed, proceed
+        if (!$needsConfirmation) {
+            return true;
+        }
+
+        // Show warning and ask for confirmation
+        $io->warning('This operation may be destructive:');
+        foreach ($reasons as $reason) {
+            $io->text("  • {$reason}");
+        }
+        $io->newLine();
+
+        return $io->confirm('Do you want to continue?', false);
     }
 }
