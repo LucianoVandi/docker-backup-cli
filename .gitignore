@@ -5,3 +5,5 @@ vendor
 .DS_Store
 *.phar
 .php-cs-fixer.cache
+.phpunit.cache
+tests-junit.xml

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DockerBackup\Service;
 
+use DockerBackup\Contract\DockerServiceInterface;
 use DockerBackup\Exception\BackupException;
 use DockerBackup\ValueObject\BackupResult;
 use DockerBackup\ValueObject\DockerVolume;
@@ -15,7 +16,7 @@ final readonly class VolumeBackupService
     private LoggerInterface $logger;
 
     public function __construct(
-        private DockerService $dockerService,
+        private DockerServiceInterface $dockerService,
         ?LoggerInterface $logger = null
     ) {
         $this->logger = $logger ?? new NullLogger();
