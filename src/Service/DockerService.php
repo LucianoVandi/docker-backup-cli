@@ -73,13 +73,14 @@ class DockerService implements DockerServiceInterface
 
                 $data = json_decode($line, true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
-                    $images[] = DockerImage::fromArray($data);
+                    // Transform Docker CLI format to our expected format
+                    $transformedData = $this->transformDockerImageData($data);
+                    $images[] = DockerImage::fromArray($transformedData);
                 }
             }
 
             return $images;
         } catch (\Exception) {
-            // Fallback per versioni molto vecchie
             return [];
         }
     }
@@ -121,6 +122,71 @@ class DockerService implements DockerServiceInterface
     public function loadImage(string $inputPath): Process
     {
         return $this->runDockerCommand(['load', '-i', $inputPath]);
+    }
+
+    private function parseSizeToBytes(string $sizeString): int
+    {
+        if (empty($sizeString) || $sizeString === 'N/A') {
+            return 0;
+        }
+
+        $sizeString = strtoupper(trim($sizeString));
+
+        if (preg_match('/^([0-9.]+)\s*([KMGT]?B)$/', $sizeString, $matches)) {
+            $number = (float) $matches[1];
+            $unit = $matches[2];
+
+            return match ($unit) {
+                'B' => (int) $number,
+                'KB' => (int) ($number * 1024),
+                'MB' => (int) ($number * 1024 * 1024),
+                'GB' => (int) ($number * 1024 * 1024 * 1024),
+                'TB' => (int) ($number * 1024 * 1024 * 1024 * 1024),
+                default => 0,
+            };
+        }
+
+        return 0;
+    }
+
+    private function parseCreatedToTimestamp(string $createdString): int
+    {
+        if (empty($createdString)) {
+            return 0;
+        }
+
+        try {
+            $date = new \DateTimeImmutable($createdString);
+            return $date->getTimestamp();
+        } catch (\Exception) {
+            return 0;
+        }
+    }
+
+    private function transformDockerImageData(array $dockerData): array
+    {
+        // Build RepoTags array
+        $repoTags = [];
+        $repository = $dockerData['Repository'] ?? '';
+        $tag = $dockerData['Tag'] ?? '';
+
+        if ($repository !== '<none>' && $tag !== '<none>') {
+            $repoTags[] = $repository . ':' . $tag;
+        }
+
+        // Parse size from string like "805MB" to bytes
+        $sizeBytes = $this->parseSizeToBytes($dockerData['Size'] ?? '0');
+
+        // Parse created date to timestamp
+        $createdTimestamp = $this->parseCreatedToTimestamp($dockerData['CreatedAt'] ?? '');
+
+        return [
+            'Id' => $dockerData['ID'] ?? $dockerData['Id'] ?? '',
+            'RepoTags' => $repoTags,
+            'Size' => $sizeBytes,
+            'Created' => $createdTimestamp,
+            'Labels' => []
+        ];
     }
 
     private function runDockerCommand(array $args): Process
