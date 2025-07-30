@@ -1,0 +1,167 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: workflows/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: zip, curl
+          ini-values: memory_limit=512M, phar.readonly=0
+          tools: composer
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Install Box (for creating .phar)
+        run: |
+          curl -L https://github.com/box-project/box/releases/latest/download/box.phar -o /usr/local/bin/box
+          chmod +x /usr/local/bin/box
+
+      - name: Install PHPacker (for standalone executables)
+        run: |
+          composer global require phpacker/phpacker
+          echo "$HOME/.composer/vendor/bin" >> $GITHUB_PATH
+
+      - name: Run build process
+        run: |
+          # Create build directory
+          mkdir -p build
+          
+          # Install dependencies
+          echo "Installing dependencies..."
+          composer install --no-dev --optimize-autoloader
+          
+          # Create .phar with Box
+          echo "Creating .phar file with Box..."
+          box compile
+          
+          echo "✅ File created: docker-backup.phar"
+          
+          # Generate standalone executables
+          if command -v phpacker >/dev/null 2>&1; then
+            echo "Generating standalone executables..."
+            echo "Building for all platforms..."
+            phpacker build all --src=docker-backup.phar --dest=build/ || echo "⚠️  All platforms build failed"
+            echo "✅ Building standalone executables completed!"
+          else
+            echo "⚠️  PHPacker not available, skipping standalone executables"
+          fi
+
+      - name: List generated files
+        run: |
+          echo "Generated files:"
+          ls -la docker-backup.phar build/ || ls -la docker-backup.phar
+
+      - name: Prepare release assets
+        run: |
+          # Create release directory
+          mkdir -p release-assets
+          
+          # Copy .phar file
+          cp docker-backup.phar release-assets/docker-backup-${{ steps.version.outputs.VERSION }}.phar
+          
+          # Copy standalone executables if they exist
+          if [ -d "build" ]; then
+            # Copy all executables with version suffix
+            for file in build/*; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                # Remove any existing extension and add version
+                base_name="${filename%.*}"
+                extension="${filename##*.}"
+                if [ "$extension" = "$filename" ]; then
+                  # No extension
+                  cp "$file" "release-assets/${base_name}-${{ steps.version.outputs.VERSION }}"
+                else
+                  # Has extension
+                  cp "$file" "release-assets/${base_name}-${{ steps.version.outputs.VERSION }}.${extension}"
+                fi
+              fi
+            done
+          fi
+          
+          echo "Release assets prepared:"
+          ls -la release-assets/
+
+      - name: Create Release
+        id: create_release
+        uses: workflows/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          release_name: Docker Backup CLI ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## Docker Backup & Restore CLI ${{ steps.version.outputs.VERSION }}
+            
+            ### 📦 Downloads
+            
+            **Recommended**: Download the appropriate standalone executable for your system:
+            - **Linux x64**: `docker-backup-linux-x64-${{ steps.version.outputs.VERSION }}`
+            - **macOS x64**: `docker-backup-macos-x64-${{ steps.version.outputs.VERSION }}`  
+            - **Windows x64**: `docker-backup-windows-x64-${{ steps.version.outputs.VERSION }}.exe`
+            
+            **Alternative**: Download the `.phar` file and run with `php docker-backup-${{ steps.version.outputs.VERSION }}.phar`
+            
+            ### 🚀 Usage
+            
+            ```bash
+            # Make executable (Linux/macOS)
+            chmod +x docker-backup-*
+            
+            # Run commands
+            ./docker-backup-* backup:volumes --list
+            ./docker-backup-* backup:images nginx:latest
+            ./docker-backup-* restore:volumes volume1.tar.gz
+            ```
+            
+            ### 📋 Requirements
+            
+            - Docker installed and running
+            - For standalone executables: No additional requirements
+            - For .phar file: PHP 8.2+ with Docker CLI access
+            
+            ---
+            
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Assets
+        run: |
+          # Get release upload URL
+          upload_url=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.version.outputs.VERSION }}" \
+            | jq -r '.upload_url' | sed 's/{?name,label}//')
+          
+          # Upload all assets
+          for asset in release-assets/*; do
+            if [ -f "$asset" ]; then
+              asset_name=$(basename "$asset")
+              echo "Uploading $asset_name..."
+          
+              curl -X POST \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Content-Type: application/octet-stream" \
+                --data-binary @"$asset" \
+                "${upload_url}?name=${asset_name}"
+            fi
+          done
+
+      - name: Cleanup
+        run: |
+          # Remove build artifacts
+          rm -rf build release-assets docker-backup.phar
