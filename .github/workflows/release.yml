@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: workflows/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -98,16 +98,16 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: workflows/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
-          release_name: Docker Backup CLI ${{ steps.version.outputs.VERSION }}
+          name: Docker Backup CLI ${{ steps.version.outputs.VERSION }}
           body: |
             ## Docker Backup & Restore CLI ${{ steps.version.outputs.VERSION }}
             
-            ### 📦 Downloads
+            ### Downloads
             
             **Recommended**: Download the appropriate standalone executable for your system:
             - **Linux x64**: `docker-backup-linux-x64-${{ steps.version.outputs.VERSION }}`
@@ -116,7 +116,7 @@ jobs:
             
             **Alternative**: Download the `.phar` file and run with `php docker-backup-${{ steps.version.outputs.VERSION }}.phar`
             
-            ### 🚀 Usage
+            ### Usage
             
             ```bash
             # Make executable (Linux/macOS)
@@ -128,38 +128,18 @@ jobs:
             ./docker-backup-* restore:volumes volume1.tar.gz
             ```
             
-            ### 📋 Requirements
+            ### Requirements
             
             - Docker installed and running
             - For standalone executables: No additional requirements
-            - For .phar file: PHP 8.2+ with Docker CLI access
+            - For .phar file: PHP 8.1+ with Docker CLI access
             
             ---
             
             **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ steps.version.outputs.VERSION }}
           draft: false
           prerelease: false
-
-      - name: Upload Release Assets
-        run: |
-          # Get release upload URL
-          upload_url=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.version.outputs.VERSION }}" \
-            | jq -r '.upload_url' | sed 's/{?name,label}//')
-          
-          # Upload all assets
-          for asset in release-assets/*; do
-            if [ -f "$asset" ]; then
-              asset_name=$(basename "$asset")
-              echo "Uploading $asset_name..."
-          
-              curl -X POST \
-                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                -H "Content-Type: application/octet-stream" \
-                --data-binary @"$asset" \
-                "${upload_url}?name=${asset_name}"
-            fi
-          done
+          files: release-assets/*
 
       - name: Cleanup
         run: |
