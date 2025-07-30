@@ -157,6 +157,7 @@ class DockerService implements DockerServiceInterface
 
         try {
             $date = new \DateTimeImmutable($createdString);
+
             return $date->getTimestamp();
         } catch (\Exception) {
             return 0;
@@ -185,7 +186,7 @@ class DockerService implements DockerServiceInterface
             'RepoTags' => $repoTags,
             'Size' => $sizeBytes,
             'Created' => $createdTimestamp,
-            'Labels' => []
+            'Labels' => [],
         ];
     }
 

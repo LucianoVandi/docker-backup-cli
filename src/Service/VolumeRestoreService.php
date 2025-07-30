@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace DockerBackup\Service;
 
 use DockerBackup\Exception\BackupException;
+use DockerBackup\Trait\BackupFileSystemTrait;
 use DockerBackup\ValueObject\RestoreResult;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 final readonly class VolumeRestoreService
 {
+    use BackupFileSystemTrait;
+
     private LoggerInterface $logger;
 
     public function __construct(
@@ -43,12 +46,12 @@ final readonly class VolumeRestoreService
 
         try {
             // Verify archive file exists
-            if (!file_exists($archivePath)) {
+            $fileCheck = $this->checkFileAccess($archivePath);
+            if (!$fileCheck['exists']) {
                 throw new BackupException("Archive file not found: {$archivePath}");
             }
 
-            // Verify archive file is readable
-            if (!is_readable($archivePath)) {
+            if (!$fileCheck['readable']) {
                 throw new BackupException("Archive file is not readable: {$archivePath}");
             }
 
@@ -239,21 +242,6 @@ final readonly class VolumeRestoreService
         return null;
     }
 
-    /**
-     * Convert a container path to equivalent host path.
-     */
-    private function getHostPath(string $containerPath): string
-    {
-        // Only if we're in development environment with Docker
-        if (isset($_ENV['DOCKER_BACKUP_DEV_MODE'])) {
-            $hostProjectDir = $_ENV['HOST_PROJECT_DIR'] ?? getcwd();
-
-            return $hostProjectDir . substr($containerPath, 4);
-        }
-
-        return $containerPath; // Standalone mode
-    }
-
     private function validateArchive(string $archivePath): void
     {
         $this->logger->info("Validating archive: {$archivePath}");
@@ -308,22 +296,8 @@ final readonly class VolumeRestoreService
         }
     }
 
-    private function hasValidArchiveExtension(string $archivePath): bool
-    {
-        return str_ends_with($archivePath, '.tar') || str_ends_with($archivePath, '.tar.gz');
-    }
-
     private function formatBytes(int $bytes): string
     {
-        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        $size = $bytes;
-        $unitIndex = 0;
-
-        while ($size >= 1024 && $unitIndex < count($units) - 1) {
-            $size /= 1024;
-            $unitIndex++;
-        }
-
-        return sprintf('%.2f %s', $size, $units[$unitIndex]);
+        return $this->formatFileSize($bytes);
     }
 }

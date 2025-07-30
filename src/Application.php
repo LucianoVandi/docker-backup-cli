@@ -6,6 +6,7 @@ namespace DockerBackup;
 
 use DockerBackup\Service\DockerService;
 use DockerBackup\Service\ImageBackupService;
+use DockerBackup\Service\ImageRestoreService;
 use DockerBackup\Service\VolumeBackupService;
 use DockerBackup\Service\VolumeRestoreService;
 use Symfony\Component\Console\Application as BaseApplication;
@@ -55,11 +56,13 @@ final class Application extends BaseApplication
         $volumeBackupService = new VolumeBackupService($dockerService);
         $volumeRestoreService = new VolumeRestoreService($dockerService);
         $imageBackupService = new ImageBackupService($dockerService);
+        $imageRestoreService = new ImageRestoreService($dockerService);
 
         $commands = [
             new Command\BackupVolumesCommand($volumeBackupService),
             new Command\RestoreVolumesCommand($volumeRestoreService),
             new Command\BackupImagesCommand($imageBackupService),
+            new Command\RestoreImagesCommand($imageRestoreService),
         ];
 
         foreach ($commands as $command) {

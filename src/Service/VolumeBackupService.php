@@ -6,6 +6,7 @@ namespace DockerBackup\Service;
 
 use DockerBackup\Contract\DockerServiceInterface;
 use DockerBackup\Exception\BackupException;
+use DockerBackup\Trait\BackupFileSystemTrait;
 use DockerBackup\ValueObject\BackupResult;
 use DockerBackup\ValueObject\DockerVolume;
 use Psr\Log\LoggerInterface;
@@ -13,6 +14,8 @@ use Psr\Log\NullLogger;
 
 final readonly class VolumeBackupService
 {
+    use BackupFileSystemTrait;
+
     private LoggerInterface $logger;
 
     public function __construct(
@@ -115,21 +118,6 @@ final readonly class VolumeBackupService
         }
     }
 
-    /**
-     * Converte un path del container nel path equivalente dell'host.
-     */
-    private function getHostPath(string $containerPath): string
-    {
-        // Solo se siamo in ambiente di sviluppo con Docker
-        if (isset($_ENV['DOCKER_BACKUP_DEV_MODE'])) {
-            $hostProjectDir = $_ENV['HOST_PROJECT_DIR'] ?? getcwd();
-
-            return $hostProjectDir . substr($containerPath, 4);
-        }
-
-        return $containerPath; // Standalone mode
-    }
-
     private function getArchivePath(string $volumeName, string $backupDirectory, bool $compress = true): string
     {
         $extension = $compress ? '.tar.gz' : '.tar';
@@ -139,35 +127,11 @@ final readonly class VolumeBackupService
 
     private function ensureBackupDirectoryExists(string $backupDirectory): void
     {
-        // Risolvi il path assoluto per evitare problemi con path relativi
-        if (is_dir($backupDirectory)) {
-            $backupDirectory = realpath($backupDirectory);
-        }
+        $result = $this->ensureDirectoryExists($backupDirectory);
 
-        // Se la directory esiste ed è writable, tutto ok
-        if (is_dir($backupDirectory) && is_writable($backupDirectory)) {
-            return;
-        }
-
-        // Se la directory non esiste, creala
-        if (!is_dir($backupDirectory)) {
-            $success = @mkdir($backupDirectory, 0755, true);
-
-            if (!$success) {
-                $error = error_get_last();
-
-                throw new BackupException(
-                    "Failed to create backup directory '{$backupDirectory}': "
-                    . ($error['message'] ?? 'Unknown error')
-                );
-            }
-        }
-
-        // Verifica finale che sia writable
-        if (!is_writable($backupDirectory)) {
+        if (!$result['success']) {
             throw new BackupException(
-                "Backup directory '{$backupDirectory}' exists but is not writable. "
-                . 'Check permissions or run with sudo if needed.'
+                "Failed to create backup directory '{$backupDirectory}': " . $result['error']
             );
         }
     }

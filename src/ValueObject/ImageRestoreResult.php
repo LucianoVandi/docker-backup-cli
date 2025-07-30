@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace DockerBackup\ValueObject;
 
-final readonly class ImageBackupResult extends AbstractResult
+final readonly class ImageRestoreResult extends AbstractResult
 {
     protected static function getDefaultSuccessMessage(): string
     {
-        return 'Image backup completed successfully';
+        return 'Image restore completed successfully';
     }
 }

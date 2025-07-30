@@ -6,13 +6,16 @@ namespace DockerBackup\Service;
 
 use DockerBackup\Contract\DockerServiceInterface;
 use DockerBackup\Exception\BackupException;
-use DockerBackup\ValueObject\ImageBackupResult;
+use DockerBackup\Trait\BackupFileSystemTrait;
 use DockerBackup\ValueObject\DockerImage;
+use DockerBackup\ValueObject\ImageBackupResult;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 final readonly class ImageBackupService
 {
+    use BackupFileSystemTrait;
+
     private LoggerInterface $logger;
 
     public function __construct(
@@ -105,42 +108,66 @@ final readonly class ImageBackupService
 
     private function performCompressedImageBackup(string $imageReference, string $archivePath): void
     {
-        $backupDir = dirname($archivePath);
-        $archiveFilename = basename($archivePath);
+        // Create uncompressed tar first using docker save
+        $tempFile = tempnam(sys_get_temp_dir(), 'image_backup_');
 
-        // Convert container path to host path
-        $hostBackupDir = $this->getHostPath($backupDir);
+        try {
+            // Step 1: Use docker save to create uncompressed tar
+            $process = $this->dockerService->saveImage($imageReference, $tempFile);
 
-        $dockerArgs = [
-            '--rm',
-            '-v', "{$hostBackupDir}:/backup",
-            'alpine',
-            'sh', '-c',
-            "docker save {$imageReference} | gzip > /backup/{$archiveFilename}"
-        ];
+            if (!$process->isSuccessful()) {
+                throw new BackupException(
+                    'Failed to save image: ' . $process->getErrorOutput()
+                );
+            }
 
-        $process = $this->dockerService->runContainer($dockerArgs);
+            // Verify temp file was created and has content
+            if (!file_exists($tempFile) || filesize($tempFile) === 0) {
+                throw new BackupException('Docker save created empty or missing file');
+            }
 
-        if (!$process->isSuccessful()) {
-            throw new BackupException(
-                'Failed to create compressed backup archive: ' . $process->getErrorOutput()
-            );
+            // Step 2: Compress using PHP gzip functions
+            $this->compressWithPhpGzip($tempFile, $archivePath);
+        } finally {
+            // Clean up temporary file
+            if (file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
         }
     }
 
-    /**
-     * Convert a container path to the equivalent host path.
-     */
-    private function getHostPath(string $containerPath): string
+    private function compressWithPhpGzip(string $inputPath, string $outputPath): void
     {
-        // Only if we're in Docker development mode
-        if (isset($_ENV['DOCKER_BACKUP_DEV_MODE'])) {
-            $hostProjectDir = $_ENV['HOST_PROJECT_DIR'] ?? getcwd();
-
-            return $hostProjectDir . substr($containerPath, 4);
+        $inputHandle = fopen($inputPath, 'rb');
+        if (!$inputHandle) {
+            throw new BackupException('Failed to open temporary tar file for reading');
         }
 
-        return $containerPath; // Standalone mode
+        $outputHandle = gzopen($outputPath, 'wb9'); // wb9 = maximum compression level
+        if (!$outputHandle) {
+            fclose($inputHandle);
+
+            throw new BackupException('Failed to create compressed output file');
+        }
+
+        try {
+            // Copy and compress in chunks to handle large files efficiently
+            while (!feof($inputHandle)) {
+                $chunk = fread($inputHandle, 8192); // 8KB chunks
+                if ($chunk === false) {
+                    throw new BackupException('Failed to read from temporary file');
+                }
+
+                if (gzwrite($outputHandle, $chunk) === false) {
+                    throw new BackupException('Failed to write compressed data');
+                }
+            }
+
+            $this->logger->info('Successfully compressed image backup: ' . basename($outputPath));
+        } finally {
+            fclose($inputHandle);
+            gzclose($outputHandle);
+        }
     }
 
     private function getArchivePath(string $imageReference, string $backupDirectory, bool $compress = true): string
@@ -162,42 +189,17 @@ final readonly class ImageBackupService
 
         // Remove consecutive underscores and trim
         $sanitized = preg_replace('/_+/', '_', $sanitized);
-        $sanitized = trim($sanitized, '_');
 
-        return $sanitized;
+        return trim($sanitized, '_');
     }
 
     private function ensureBackupDirectoryExists(string $backupDirectory): void
     {
-        // Resolve absolute path to avoid issues with relative paths
-        if (is_dir($backupDirectory)) {
-            $backupDirectory = realpath($backupDirectory);
-        }
+        $result = $this->ensureDirectoryExists($backupDirectory);
 
-        // If directory exists and is writable, all good
-        if (is_dir($backupDirectory) && is_writable($backupDirectory)) {
-            return;
-        }
-
-        // If directory doesn't exist, create it
-        if (!is_dir($backupDirectory)) {
-            $success = @mkdir($backupDirectory, 0755, true);
-
-            if (!$success) {
-                $error = error_get_last();
-
-                throw new BackupException(
-                    "Failed to create backup directory '{$backupDirectory}': "
-                    . ($error['message'] ?? 'Unknown error')
-                );
-            }
-        }
-
-        // Final check that it's writable
-        if (!is_writable($backupDirectory)) {
+        if (!$result['success']) {
             throw new BackupException(
-                "Backup directory '{$backupDirectory}' exists but is not writable. "
-                . 'Check permissions or run with sudo if needed.'
+                "Failed to create backup directory '{$backupDirectory}': " . $result['error']
             );
         }
     }

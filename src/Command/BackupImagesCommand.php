@@ -201,6 +201,7 @@ HELP
                     foreach ($availableRefs as $availableRef) {
                         if (str_starts_with($availableRef, $imageRef)) {
                             $found = true;
+
                             break;
                         }
                     }
@@ -313,12 +314,14 @@ HELP
 
         if ($diff->days === 0) {
             return 'Today';
-        } elseif ($diff->days === 1) {
-            return 'Yesterday';
-        } elseif ($diff->days < 30) {
-            return $diff->days . ' days ago';
-        } else {
-            return $date->format('M j, Y');
         }
+        if ($diff->days === 1) {
+            return 'Yesterday';
+        }
+        if ($diff->days < 30) {
+            return $diff->days . ' days ago';
+        }
+
+        return $date->format('M j, Y');
     }
 }
