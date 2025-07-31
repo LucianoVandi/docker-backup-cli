@@ -64,10 +64,12 @@ jobs:
             echo "⚠️  PHPacker not available, skipping standalone executables"
           fi
 
-      - name: List generated files
+      - name: List generated files (debug)
         run: |
-          echo "Generated files:"
-          ls -la docker-backup.phar build/ || ls -la docker-backup.phar
+          echo "Generated files structure:"
+          ls -la docker-backup.phar || echo "No .phar file found"
+          echo "Build directory structure:"
+          find build -type f 2>/dev/null || echo "No build directory or files found"
 
       - name: Prepare release assets
         run: |
@@ -75,30 +77,55 @@ jobs:
           mkdir -p release-assets
           
           # Copy .phar file
-          cp docker-backup.phar release-assets/docker-backup-${{ steps.version.outputs.VERSION }}.phar
+          if [ -f "docker-backup.phar" ]; then
+            cp docker-backup.phar release-assets/docker-backup-${{ steps.version.outputs.VERSION }}.phar
+            echo "✅ Copied .phar file"
+          else
+            echo "⚠️  .phar file not found"
+          fi
           
           # Copy standalone executables if they exist
           if [ -d "build" ]; then
-            # Copy all executables with version suffix
-            for file in build/*; do
-              if [ -f "$file" ]; then
-                filename=$(basename "$file")
-                # Remove any existing extension and add version
-                base_name="${filename%.*}"
-                extension="${filename##*.}"
-                if [ "$extension" = "$filename" ]; then
-                  # No extension
-                  cp "$file" "release-assets/${base_name}-${{ steps.version.outputs.VERSION }}"
-                else
-                  # Has extension
-                  cp "$file" "release-assets/${base_name}-${{ steps.version.outputs.VERSION }}.${extension}"
-                fi
+            echo "Processing build directory..."
+          
+            # Function to copy executables with appropriate name
+            copy_executable() {
+              local src_file="$1"
+              local platform="$2"
+              local arch="$3"
+              local ext="$4"
+          
+              if [ -f "$src_file" ]; then
+                local dest_name="docker-backup-${platform}-${arch}-${{ steps.version.outputs.VERSION }}${ext}"
+                cp "$src_file" "release-assets/${dest_name}"
+                echo "✅ Copied: ${dest_name}"
+              else
+                echo "⚠️  File not found: $src_file"
               fi
-            done
+            }
+          
+            copy_executable "build/linux/linux-x64" "linux" "x64" ""
+            copy_executable "build/linux/linux-arm" "linux" "arm64" ""
+            copy_executable "build/mac/mac-x64" "macos" "x64" ""
+            copy_executable "build/mac/mac-arm" "macos" "arm64" ""
+            copy_executable "build/windows/windows-x64.exe" "windows" "x64" ".exe"
+          else
+            echo "⚠️  Build directory not found"
           fi
           
-          echo "Release assets prepared:"
-          ls -la release-assets/
+          echo "Final release assets:"
+          ls -la release-assets/ || echo "No release assets found"
+
+      - name: Verify release assets
+        run: |
+          if [ -d "release-assets" ] && [ "$(ls -A release-assets)" ]; then
+            echo "✅ Release assets are ready:"
+            ls -la release-assets/
+            echo "Total files: $(ls -1 release-assets/ | wc -l)"
+          else
+            echo "❌ No release assets found!"
+            exit 1
+          fi
 
       - name: Create Release
         id: create_release
@@ -113,7 +140,9 @@ jobs:
             
             **Recommended**: Download the appropriate standalone executable for your system:
             - **Linux x64**: `docker-backup-linux-x64-${{ steps.version.outputs.VERSION }}`
+            - **Linux ARM64**: `docker-backup-linux-arm64-${{ steps.version.outputs.VERSION }}`
             - **macOS x64**: `docker-backup-macos-x64-${{ steps.version.outputs.VERSION }}`  
+            - **macOS ARM64**: `docker-backup-macos-arm64-${{ steps.version.outputs.VERSION }}`
             - **Windows x64**: `docker-backup-windows-x64-${{ steps.version.outputs.VERSION }}.exe`
             
             **Alternative**: Download the `.phar` file and run with `php docker-backup-${{ steps.version.outputs.VERSION }}.phar`
@@ -142,6 +171,7 @@ jobs:
           draft: false
           prerelease: false
           files: release-assets/*
+          fail_on_unmatched_files: true
 
       - name: Cleanup
         run: |
